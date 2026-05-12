@@ -72,9 +72,12 @@ tab1, tab2 = st.tabs(["🔤 Single Text", "📂 Batch Analysis (CSV)"])
 with tab1:
     col1, col2 = st.columns([2, 1])
 
+    default_text = st.session_state.get("example_text", "")
+
     with col1:
         user_text = st.text_area(
             "Enter text to analyze",
+            value=default_text,
             placeholder="Type a review, tweet, or any text here...",
             height=150,
         )
@@ -88,7 +91,12 @@ with tab1:
         ]
         for ex in examples:
             if st.button(ex[:45] + "...", key=ex):
-                user_text = ex
+                st.session_state["example_text"] = ex
+                st.rerun()
+
+    # Fill text area from session state if example was clicked
+    if "example_text" in st.session_state:
+        user_text = st.session_state.pop("example_text")
 
     if st.button("Analyze Sentiment", type="primary", use_container_width=True):
         if not user_text.strip():
