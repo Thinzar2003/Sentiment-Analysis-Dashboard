@@ -1,5 +1,6 @@
 """
 Sentiment Analysis Dashboard — Streamlit App
+Loads model directly from HuggingFace Hub — no FastAPI needed.
 Run: streamlit run app.py
 """
 
@@ -7,9 +8,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import requests
-import io
 import time
+from transformers import pipeline
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -22,8 +22,6 @@ st.set_page_config(
 # ── Custom CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    .main { background: #0f1117; }
-    .stApp { background: #0f1117; }
     .metric-card {
         background: #1a1d2e;
         border: 1px solid #2d3250;
@@ -34,43 +32,36 @@ st.markdown("""
     .positive { color: #4ade80; font-size: 1.4rem; font-weight: 700; }
     .negative { color: #f87171; font-size: 1.4rem; font-weight: 700; }
     .neutral  { color: #94a3b8; font-size: 1.4rem; font-weight: 700; }
-    .score-bar { height: 8px; border-radius: 4px; margin-top: 6px; }
 </style>
 """, unsafe_allow_html=True)
 
+# ── Load model (cached so it only loads once) ─────────────────────────────────
+@st.cache_resource
+def load_model():
+    return pipeline(
+        "text-classification",
+        model="Thinzar2003/sentiment-distilbert",
+    )
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("⚙️ Settings")
-    api_url = st.text_input(
-        "API Base URL",
-        value="http://localhost:8000",
-        help="URL of your running FastAPI backend",
-    )
-    st.divider()
-    st.markdown("### About")
+    st.title("⚙️ About")
     st.markdown(
         "Fine-tuned **DistilBERT** model for binary sentiment classification "
         "(Positive / Negative) on IMDB movie reviews."
     )
-    st.markdown("**Model**: `distilbert-base-uncased`")
+    st.markdown("**Model**: `Thinzar2003/sentiment-distilbert`")
     st.markdown("**Dataset**: IMDB (50k reviews)")
-
-    # Health check
-    st.divider()
-    if st.button("🔍 Check API Health"):
-        try:
-            r = requests.get(f"{api_url}/health", timeout=5)
-            if r.ok:
-                st.success("API is online ✅")
-            else:
-                st.error("API returned an error")
-        except Exception:
-            st.error("Cannot connect to API")
+    st.markdown("**Built with**: HuggingFace + Streamlit")
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("💬 Sentiment Analysis Dashboard")
-st.caption("Powered by fine-tuned DistilBERT · Built with HuggingFace + FastAPI + Streamlit")
+st.caption("Powered by fine-tuned DistilBERT · Built with HuggingFace + Streamlit")
 st.divider()
+
+# ── Load model with spinner ───────────────────────────────────────────────────
+with st.spinner("Loading model from HuggingFace Hub... (first load takes ~30s)"):
+    classifier = load_model()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 tab1, tab2 = st.tabs(["🔤 Single Text", "📂 Batch Analysis (CSV)"])
@@ -104,95 +95,79 @@ with tab1:
             st.warning("Please enter some text first.")
         else:
             with st.spinner("Analyzing..."):
-                try:
-                    resp = requests.post(
-                        f"{api_url}/predict",
-                        json={"text": user_text},
-                        timeout=10,
-                    )
-                    resp.raise_for_status()
-                    result = resp.json()
+                t0 = time.time()
+                result = classifier(user_text)[0]
+                latency = round((time.time() - t0) * 1000, 1)
 
-                    # Display result
-                    st.divider()
-                    r1, r2, r3 = st.columns(3)
+            st.divider()
+            r1, r2, r3 = st.columns(3)
 
-                    with r1:
-                        label = result["label"]
-                        color_cls = "positive" if label == "POSITIVE" else "negative"
-                        emoji = "😊" if label == "POSITIVE" else "😞"
-                        st.markdown(
-                            f"<div class='metric-card'>"
-                            f"<div style='color:#94a3b8;font-size:.85rem'>Sentiment</div>"
-                            f"<div class='{color_cls}'>{emoji} {label}</div>"
-                            f"</div>",
-                            unsafe_allow_html=True,
-                        )
+            label = result["label"]
+            score = result["score"]
+            emoji = "😊" if label == "POSITIVE" else "😞"
+            color_cls = "positive" if label == "POSITIVE" else "negative"
 
-                    with r2:
-                        score_pct = round(result["score"] * 100, 1)
-                        st.markdown(
-                            f"<div class='metric-card'>"
-                            f"<div style='color:#94a3b8;font-size:.85rem'>Confidence</div>"
-                            f"<div class='positive'>{score_pct}%</div>"
-                            f"</div>",
-                            unsafe_allow_html=True,
-                        )
+            with r1:
+                st.markdown(
+                    f"<div class='metric-card'>"
+                    f"<div style='color:#94a3b8;font-size:.85rem'>Sentiment</div>"
+                    f"<div class='{color_cls}'>{emoji} {label}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with r2:
+                st.markdown(
+                    f"<div class='metric-card'>"
+                    f"<div style='color:#94a3b8;font-size:.85rem'>Confidence</div>"
+                    f"<div class='positive'>{round(score*100,1)}%</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with r3:
+                st.markdown(
+                    f"<div class='metric-card'>"
+                    f"<div style='color:#94a3b8;font-size:.85rem'>Latency</div>"
+                    f"<div class='neutral'>{latency} ms</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
-                    with r3:
-                        st.markdown(
-                            f"<div class='metric-card'>"
-                            f"<div style='color:#94a3b8;font-size:.85rem'>Latency</div>"
-                            f"<div class='neutral'>{result['latency_ms']} ms</div>"
-                            f"</div>",
-                            unsafe_allow_html=True,
-                        )
-
-                    # Confidence bar chart
-                    fig = go.Figure(go.Bar(
-                        x=[result["score"], 1 - result["score"]],
-                        y=["Predicted", "Other"],
-                        orientation="h",
-                        marker_color=["#4ade80" if label == "POSITIVE" else "#f87171", "#2d3250"],
-                        text=[f"{result['score']*100:.1f}%", f"{(1-result['score'])*100:.1f}%"],
-                        textposition="inside",
-                    ))
-                    fig.update_layout(
-                        title="Confidence Scores",
-                        paper_bgcolor="#1a1d2e",
-                        plot_bgcolor="#1a1d2e",
-                        font_color="#e2e8f0",
-                        height=180,
-                        margin=dict(l=20, r=20, t=40, b=20),
-                        showlegend=False,
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-
-                except requests.exceptions.ConnectionError:
-                    st.error("❌ Cannot connect to the API. Make sure your FastAPI server is running.")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+            fig = go.Figure(go.Bar(
+                x=[score, 1 - score],
+                y=["Predicted", "Other"],
+                orientation="h",
+                marker_color=["#4ade80" if label == "POSITIVE" else "#f87171", "#2d3250"],
+                text=[f"{score*100:.1f}%", f"{(1-score)*100:.1f}%"],
+                textposition="inside",
+            ))
+            fig.update_layout(
+                title="Confidence Scores",
+                paper_bgcolor="#1a1d2e",
+                plot_bgcolor="#1a1d2e",
+                font_color="#e2e8f0",
+                height=180,
+                margin=dict(l=20, r=20, t=40, b=20),
+                showlegend=False,
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 2: Batch CSV Analysis
 # ─────────────────────────────────────────────────────────────────────────────
 with tab2:
-    st.markdown("Upload a CSV file with a **`text`** column (max 100 rows per batch).")
+    st.markdown("Upload a CSV file with a **`text`** column (max 100 rows).")
 
     col_a, col_b = st.columns([3, 1])
     with col_a:
         uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
     with col_b:
-        # Sample CSV download
-        sample = pd.DataFrame({
-            "text": [
-                "Amazing product, highly recommend!",
-                "Worst experience ever, do not buy.",
-                "Pretty good for the price.",
-                "Completely broke after one use.",
-                "Exceeded my expectations, love it!",
-            ]
-        })
+        sample = pd.DataFrame({"text": [
+            "Amazing product, highly recommend!",
+            "Worst experience ever, do not buy.",
+            "Pretty good for the price.",
+            "Completely broke after one use.",
+            "Exceeded my expectations, love it!",
+        ]})
         st.download_button(
             "📥 Download sample CSV",
             data=sample.to_csv(index=False),
@@ -202,7 +177,6 @@ with tab2:
 
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
-
         if "text" not in df.columns:
             st.error("CSV must have a 'text' column.")
         else:
@@ -212,87 +186,67 @@ with tab2:
             if st.button("Run Batch Analysis", type="primary"):
                 texts = df["text"].astype(str).tolist()[:100]
 
-                progress = st.progress(0, text="Sending to API...")
-                try:
-                    resp = requests.post(
-                        f"{api_url}/predict/batch",
-                        json={"texts": texts},
-                        timeout=60,
+                with st.spinner(f"Analyzing {len(texts)} texts..."):
+                    raw = classifier(texts)
+
+                results_df = pd.DataFrame([
+                    {
+                        "text": text,
+                        "label": r["label"],
+                        "confidence": round(r["score"] * 100, 1),
+                    }
+                    for text, r in zip(texts, raw)
+                ])
+
+                st.divider()
+                st.subheader("📊 Summary")
+                pos = sum(1 for r in raw if r["label"] == "POSITIVE")
+                neg = len(raw) - pos
+
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Total Analyzed", len(raw))
+                m2.metric("Positive 😊", pos)
+                m3.metric("Negative 😞", neg)
+                m4.metric("Avg Confidence", f"{results_df['confidence'].mean():.1f}%")
+
+                ch1, ch2 = st.columns(2)
+                with ch1:
+                    pie = px.pie(
+                        names=["POSITIVE", "NEGATIVE"],
+                        values=[pos, neg],
+                        color=["POSITIVE", "NEGATIVE"],
+                        color_discrete_map={"POSITIVE": "#4ade80", "NEGATIVE": "#f87171"},
+                        title="Sentiment Distribution",
                     )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    progress.progress(100, text="Done!")
-                    time.sleep(0.3)
-                    progress.empty()
+                    pie.update_layout(paper_bgcolor="#1a1d2e", font_color="#e2e8f0")
+                    st.plotly_chart(pie, use_container_width=True)
 
-                    results_df = pd.DataFrame([
-                        {"text": r["text"], "label": r["label"], "confidence": round(r["score"] * 100, 1)}
-                        for r in data["results"]
-                    ])
-                    summary = data["summary"]
-
-                    # ── Summary metrics ────────────────────────────────────
-                    st.divider()
-                    st.subheader("📊 Summary")
-                    m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("Total Analyzed", summary["total"])
-                    m2.metric("Positive 😊", summary["positive"])
-                    m3.metric("Negative 😞", summary["negative"])
-                    m4.metric("Avg Confidence", f"{summary['avg_confidence']*100:.1f}%")
-
-                    # ── Charts ─────────────────────────────────────────────
-                    ch1, ch2 = st.columns(2)
-
-                    with ch1:
-                        pie = px.pie(
-                            names=["POSITIVE", "NEGATIVE"],
-                            values=[summary["positive"], summary["negative"]],
-                            color=["POSITIVE", "NEGATIVE"],
-                            color_discrete_map={"POSITIVE": "#4ade80", "NEGATIVE": "#f87171"},
-                            title="Sentiment Distribution",
-                        )
-                        pie.update_layout(
-                            paper_bgcolor="#1a1d2e",
-                            font_color="#e2e8f0",
-                        )
-                        st.plotly_chart(pie, use_container_width=True)
-
-                    with ch2:
-                        hist = px.histogram(
-                            results_df,
-                            x="confidence",
-                            color="label",
-                            color_discrete_map={"POSITIVE": "#4ade80", "NEGATIVE": "#f87171"},
-                            title="Confidence Distribution",
-                            nbins=20,
-                        )
-                        hist.update_layout(
-                            paper_bgcolor="#1a1d2e",
-                            plot_bgcolor="#1a1d2e",
-                            font_color="#e2e8f0",
-                        )
-                        st.plotly_chart(hist, use_container_width=True)
-
-                    # ── Results table ──────────────────────────────────────
-                    st.subheader("📋 Results Table")
-                    st.dataframe(
-                        results_df.style.applymap(
-                            lambda v: "color: #4ade80" if v == "POSITIVE" else "color: #f87171",
-                            subset=["label"],
-                        ),
-                        use_container_width=True,
-                        height=300,
+                with ch2:
+                    hist = px.histogram(
+                        results_df, x="confidence", color="label",
+                        color_discrete_map={"POSITIVE": "#4ade80", "NEGATIVE": "#f87171"},
+                        title="Confidence Distribution", nbins=20,
                     )
-
-                    # Download results
-                    st.download_button(
-                        "📥 Download Results CSV",
-                        data=results_df.to_csv(index=False),
-                        file_name="sentiment_results.csv",
-                        mime="text/csv",
+                    hist.update_layout(
+                        paper_bgcolor="#1a1d2e",
+                        plot_bgcolor="#1a1d2e",
+                        font_color="#e2e8f0",
                     )
+                    st.plotly_chart(hist, use_container_width=True)
 
-                except requests.exceptions.ConnectionError:
-                    st.error("❌ Cannot connect to the API.")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                st.subheader("📋 Results Table")
+                st.dataframe(
+                    results_df.style.applymap(
+                        lambda v: "color: #4ade80" if v == "POSITIVE" else "color: #f87171",
+                        subset=["label"],
+                    ),
+                    use_container_width=True,
+                    height=300,
+                )
+
+                st.download_button(
+                    "📥 Download Results CSV",
+                    data=results_df.to_csv(index=False),
+                    file_name="sentiment_results.csv",
+                    mime="text/csv",
+                )
