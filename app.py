@@ -70,35 +70,27 @@ tab1, tab2 = st.tabs(["🔤 Single Text", "📂 Batch Analysis (CSV)"])
 # TAB 1: Single Text
 # ─────────────────────────────────────────────────────────────────────────────
 with tab1:
-    col1, col2 = st.columns([2, 1])
+    examples = [
+        "This movie was absolutely fantastic! A masterpiece.",
+        "Terrible film. Waste of 2 hours, extremely boring.",
+        "It was alright, had some good moments but nothing special.",
+    ]
 
-    default_text = st.session_state.get("example_text", "")
+    st.markdown("**Try these examples:**")
+    ex_cols = st.columns(3)
+    for i, ex in enumerate(examples):
+        if ex_cols[i].button(ex[:40] + "...", key=f"ex_{i}", use_container_width=True):
+            st.session_state["input_text"] = ex
 
-    with col1:
-        user_text = st.text_area(
-            "Enter text to analyze",
-            value=default_text,
-            placeholder="Type a review, tweet, or any text here...",
-            height=150,
-        )
+    user_text = st.text_area(
+        "Or type your own text below:",
+        value=st.session_state.get("input_text", ""),
+        placeholder="Type a review, tweet, or any text here...",
+        height=150,
+        key="input_text",
+    )
 
-    with col2:
-        st.markdown("**Try these examples:**")
-        examples = [
-            "This movie was absolutely fantastic! A masterpiece.",
-            "Terrible film. Waste of 2 hours, extremely boring.",
-            "It was alright, had some good moments but nothing special.",
-        ]
-        for ex in examples:
-            if st.button(ex[:45] + "...", key=ex):
-                st.session_state["example_text"] = ex
-                st.rerun()
-
-    # Fill text area from session state if example was clicked
-    if "example_text" in st.session_state:
-        user_text = st.session_state.pop("example_text")
-
-    if st.button("Analyze Sentiment", type="primary", use_container_width=True):
+    if st.button("🔍 Analyze Sentiment", type="primary", use_container_width=True):
         if not user_text.strip():
             st.warning("Please enter some text first.")
         else:
