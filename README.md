@@ -107,14 +107,6 @@ Visit: http://localhost:8501
 
 ---
 
-## 🔮 Future Improvements
 
-- [ ] Add neutral sentiment (3-class model)
-- [ ] Support multilingual reviews
-- [ ] Add SHAP explainability (which words drive the prediction)
-- [ ] Persist history with SQLite
-- [ ] Docker deployment
-
----
 
 *Built as a portfolio project showcasing end-to-end NLP with HuggingFace, FastAPI, and Streamlit.*
