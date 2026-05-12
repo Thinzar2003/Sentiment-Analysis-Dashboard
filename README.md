@@ -2,7 +2,7 @@
 
 An end-to-end NLP portfolio project: fine-tune DistilBERT on IMDB reviews, serve predictions via FastAPI, and visualize results in a Streamlit web app.
 
-**Live Demo**: [your-app.streamlit.app](https://your-app.streamlit.app) *(update after deployment)*
+**Live Demo**: [your-app.streamlit.app](https://sentiment-analysis-dashboard-dqsqvxqotjpkswwvhcyldq.streamlit.app/) 
 
 ---
 
